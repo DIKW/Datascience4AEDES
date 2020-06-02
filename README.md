@@ -11,6 +11,6 @@ Hiermee biedt Aedes in samenwerking met DIKW Intelligence een platform voor het 
 ## Thema's
 Als eerste thema is het voorspellen van mutatiegraad aangepakt. 
 
-Voor ieder thema is er een wiki pagina beschikbaar, R scripts en Rmd templates met analyses die zijn gemaakt met de werkgroep.
+Voor ieder thema is er [een wiki pagina beschikbaar](https://github.com/DIKW/Datascience4AEDES/wiki), R scripts en Rmd templates met analyses die zijn gemaakt met de werkgroep.
 
 Hopelijk volgen er snel meer thema's die we hier gezamenlijk op een hoger gemeenschappelijk niveau kunnen brengen.
