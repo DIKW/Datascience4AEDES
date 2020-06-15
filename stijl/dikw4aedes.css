@@ -1,0 +1,346 @@
+/*
+title logo
+ */
+
+.gdbar img {
+   width: 300px !important;
+   height: 116px !important;
+   margin: 24px 24px;
+}
+
+.gdbar {
+   width: 400px !important;
+   height: 150px !important;
+}
+
+/*
+footer logo
+ */
+
+slides > slide:not(.nobackground):before {
+   width: 200px;
+   height: 77px;
+   background-size: 200px 77px;
+   top: 10px;
+   left: 1350px;
+}
+
+/* smaller*/
+
+.smaller {
+	font-size: 20px;
+}
+
+.reveal section del
+{
+   /* yellow/orange color of the point of the dikw-bird */
+   color: #f7a901;
+}
+
+
+/* the p section is the general text section */
+.reveal section p
+{
+   color: blue;
+}
+
+.title-slide hgroup h1 {
+  font-size: 65px;
+  line-height: 1.4;
+  letter-spacing: -3px;
+  color: #00a7e5;
+}
+
+h2 {
+   font-size: 45px;
+   line-height: 65px;
+   letter-spacing: -2px;
+   color: #00a7e5;
+}
+
+
+/* line 127, ../scss/default.scss */
+slides > slide.dark {
+   background: #00a7e5 !important;
+}
+
+
+slides > slide {
+   display: none;
+   font-family: Prokyo;
+   font-size: 26px;
+   color: #03296a;
+/*   width: 1280px;
+   height: 720px; */
+   width: 1600px;
+   height: 900px;
+   margin-left: -800px;
+   margin-top: -450px;
+   padding: 40px 60px;
+   -webkit-border-radius: 5px;
+   -moz-border-radius: 5px;
+   -ms-border-radius: 5px;
+   -o-border-radius: 5px;
+   border-radius: 5px;
+   -webkit-transition: all 0.6s ease-in-out;
+   -moz-transition: all 0.6s ease-in-out;
+   -o-transition: all 0.6s ease-in-out;
+   transition: all 0.6s ease-in-out;
+
+}
+
+/* ruimte onder titel */
+slides > slide > hgroup + article {
+  margin-top: 5px;
+}
+
+/* line 212, ../scss/default.scss */
+slides.layout-widescreen > slide,
+slides.layout-faux-widescreen > slide {
+  margin-left: -800px;
+  width: 1600px;
+}
+
+
+
+/* Atelier Sulphurpool Light by Bram de Haan (http://atelierbram.github.io/syntax-highlighting/atelier-schemes/sulphurpool) */
+
+/* r output opmaak */
+pre {
+  font-family: Menlo, Consolas, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco, monospace;
+  font-size: 16px;
+  color: #0174DF;
+  line-height: 1.4;
+  padding: 10px 0 10px 60px;
+  letter-spacing: -1px;
+  margin-bottom: 20px;
+  width: 106%;
+  left: -60px;
+  position: relative;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  /*overflow: hidden;*/
+}
+
+/* Style voor r chunk*/
+.prettyprint {
+   background: #f5f7ff;
+   color: #979db4;
+   font-family: Menlo, Consolas, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco, monospace;
+   font-size: 16px;
+   line-height: 1.4;
+   border: 1px solid #dfe2f1;
+   padding: 10px;
+   border-radius: 3px;
+   margin:auto;
+   width: 90%
+}
+
+
+/* plain text */
+.prettyprint .pln {
+     color: #202746;
+  }
+
+@media screen {
+   /* string content */
+   .prettyprint .str {
+      color: #ac9739;
+   }
+
+   /* a keyword */
+   .prettyprint .kwd {
+      color: #6679cc;
+   }
+
+   /* a comment */
+   .prettyprint .com {
+      color: #898ea4;
+   }
+
+   /* a type name */
+   .prettyprint .typ {
+      color: #3d8fd1;
+   }
+
+   /* a literal value */
+   .prettyprint .lit {
+      color: #c76b29;
+   }
+
+   /* punctuation */
+   .prettyprint .pun {
+      color: #202746;
+   }
+
+   /* lisp open bracket */
+   .prettyprint .opn {
+      color: #202746;
+   }
+
+   /* lisp close bracket */
+   .prettyprint .clo {
+      color: #202746;
+   }
+
+   /* a markup tag name */
+   .prettyprint .tag {
+      color: #c94922;
+   }
+
+   /* a markup attribute name */
+   .prettyprint .atn {
+      color: #c76b29;
+   }
+
+   /* a markup attribute value */
+   .prettyprint .atv {
+      color: #22a2c9;
+   }
+
+   /* a declaration */
+   .prettyprint .dec {
+      color: #c76b29;
+   }
+
+   /* a variable name */
+   .prettyprint .var {
+      color: #c94922;
+   }
+
+   /* a function name */
+   .prettyprint .fun {
+      color: #3d8fd1;
+   }
+}
+
+
+
+
+/* Use higher contrast and text-weight for printable form.prettyprint . */
+@media print, projection {
+  .prettyprint .str {
+    color: #006600;
+  }
+
+  .prettyprint .kwd {
+    color: #006;
+    font-weight: bold;
+  }
+
+  .prettyprint .com {
+    color: #600;
+    font-style: italic;
+  }
+
+  .prettyprint .typ {
+    color: #404;
+    font-weight: bold;
+  }
+
+  .prettyprint .lit {
+    color: #004444;
+  }
+
+  .prettyprint .pun, .prettyprint .opn, .prettyprint .clo {
+    color: #444400;
+  }
+
+  .prettyprint .tag {
+    color: #006;
+    font-weight: bold;
+  }
+
+  .prettyprint .atn {
+    color: #440044;
+  }
+
+  .prettyprint .atv {
+    color: #006600;
+  }
+}
+
+
+/* Specify class=linenums on a pre to get line numbering */
+ol.linenums {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* IE indents via margin-left */
+li.L0,
+li.L1,
+li.L2,
+li.L3,
+li.L4,
+li.L5,
+li.L6,
+li.L7,
+li.L8,
+li.L9 {
+  /* */
+}
+
+/* Alternate shading for lines */
+li.L1,
+li.L3,
+li.L5,
+li.L7,
+li.L9 {
+  /* */
+}
+
+/* Aanpassing mbt table sizes */
+
+
+/* line 472, ../scss/default.scss */
+table.rmdtable {
+  width: 80%;
+  border-collapse: -moz-initial;
+  border-collapse: initial;
+  border-spacing: 2px;
+  border-bottom: 1px solid #797979;
+}
+/* line 479, ../scss/default.scss */
+table.rmdtable tr > td:first-child, table th {
+  font-weight: 600;
+  color: #515151;
+}
+/* line 484, ../scss/default.scss */
+table.rmdtable tr:nth-child(odd) {
+  background-color: #e6e6e6;
+}
+/* line 488, ../scss/default.scss */
+table.rmdtable th {
+  color: white;
+  font-size: 18px;
+  background: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(40%, #4387fd), color-stop(80%, #2a7cdf)) no-repeat;
+  background: -webkit-linear-gradient(top, #4387fd 40%, #2a7cdf 80%) no-repeat;
+  background: -moz-linear-gradient(top, #4387fd 40%, #2a7cdf 80%) no-repeat;
+  background: -o-linear-gradient(top, #4387fd 40%, #2a7cdf 80%) no-repeat;
+  background: linear-gradient(top, #4387fd 40%, #2a7cdf 80%) no-repeat;
+}
+/* line 494, ../scss/default.scss */
+table.rmdtable td, table th {
+  font-size: 14px;
+  padding: 0.1em 0.5em;
+}
+/* line 499, ../scss/default.scss */
+table.rmdtable td.highlight {
+  color: #515151;
+  background: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(40%, #ffd14d), color-stop(80%, #f6c000)) no-repeat;
+  background: -webkit-linear-gradient(top, #ffd14d 40%, #f6c000 80%) no-repeat;
+  background: -moz-linear-gradient(top, #ffd14d 40%, #f6c000 80%) no-repeat;
+  background: -o-linear-gradient(top, #ffd14d 40%, #f6c000 80%) no-repeat;
+  background: linear-gradient(top, #ffd14d 40%, #f6c000 80%) no-repeat;
+}
+/* line 504, ../scss/default.scss */
+table.rmdtable.rows {
+  border-bottom: none;
+  border-right: 1px solid #797979;
+}
+
+
+/* hk two column slide force break */
+.forceBreak { -webkit-column-break-after: always; break-after: column; }

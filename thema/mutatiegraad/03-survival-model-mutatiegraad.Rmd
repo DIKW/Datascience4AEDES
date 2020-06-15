@@ -1,0 +1,313 @@
+---
+title: "Template Mutatie survival model"
+author: "Werkgroep Bigdata"
+date: "18 februari 2020"
+output:
+  ioslides_presentation: 
+    fig_height: 4
+    fig_retina: null
+    fig_width: 8
+    css: ../../stijl/dikw4aedes.css
+    logo: ../../logo/logo-aedes.svg
+    smaller: yes
+    widescreen: yes
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE, cache = FALSE)
+
+setwd("~/r-studio/aedes-mutaties")
+```
+
+## Introductie
+In deze stap gaan we onderzoeken of we met een survival analyse een bruikbaar resultaat kunnen ontwikkelen.
+
+Hierin zien we huren als het "overleven op een bepaald adres".
+
+
+## Inladen van data:
+
+We beginnen met het inladen van de data. In dit geval hebben we te maken met een arff bestand.
+
+```{r}
+require(farff)
+df.t2 = readARFF("./data/verhuurmutaties_mutaties_train_13141516.arff")
+```
+
+Even controleren of alles goed gegaan is. Wat hebben we precies voor data?
+
+```{r}
+require(knitr)
+kable(head(df.t2),format="markdown",padding = 0)
+```
+
+## Opschonen van data
+
+We kunnen ervan uitgaan dat de data helemaal schoon is, maar meestal is dit niet het geval. Een voorbeeld is het kijken naar leeftijd van de bewoner in verhouding tot het aantal maanden dat deze persoon er woont. Het aantal jaren bewoond mag natuurlijk niet meer zijn dan de leeftijd van de bewoner. Hiervoor moeten we de data dus opschonen. Dit haalt ook de bewoners uit de dataset waarvan we de leeftijd niet weten.
+
+```{r}
+plot(hrdr_leeftijd_contractant~oge_aantal_maanden_gewoond, df.t2)
+```
+
+## Leeftijd vs huurtijd
+```{r}
+summary(df.t2$oge_aantal_maanden_gewoond/12>df.t2$hrdr_leeftijd_contractant)
+plot(hrdr_leeftijd_contractant~oge_aantal_maanden_gewoond, df.t2[df.t2$oge_aantal_maanden_gewoond/12<df.t2$hrdr_leeftijd_contractant,])
+```
+
+## Scatterplots met aplha
+```{r}
+require(ggplot2)
+df.t <- df.t2[df.t2$oge_aantal_maanden_gewoond/12<df.t2$hrdr_leeftijd_contractant,]
+ggplot(df.t, aes(x=oge_aantal_maanden_gewoond, y=hrdr_leeftijd_contractant)) +
+    geom_point(alpha=0.01)
+
+```
+
+
+## Opschonen
+```{r}
+# dus we moeten filteren:
+df.t2 <- df.t2[df.t2$oge_aantal_maanden_gewoond/12<df.t2$hrdr_leeftijd_contractant,]
+# kijken hoe het zit met de leeftijd bij inschrijving:
+df.t2$leeftijd_ini <- df.t2$hrdr_leeftijd_contractant - df.t2$oge_aantal_maanden_gewoond/12
+ggplot(df.t2, aes(leeftijd_ini)) + geom_histogram(bins=50)
+```
+
+
+## Survival data: Complete cases
+
+Als we de data hebben opgeschoond maken we een subset met alleen de gemuteerde woningen. Dit wordt in survival analysis gedefinieerd als 'complete data'. Vervolgens maken we een histogram van het aantal maanden gewoond. [Link](https://www.datacamp.com/community/tutorials/survival-analysis-R) datacamp course. 
+
+```{r}
+df.sub <- df.t2[df.t2$oge_mutatie_label=="mutatie",]
+# sorteer op aantal maanden
+df.sub <- df.sub[order(df.sub$oge_aantal_maanden_gewoond),]
+df.sub$freq <- 1/nrow(df.sub)
+```
+
+## Histograms
+```{r, warning=FALSE}
+require(gridExtra)
+# histogram totaal
+h1 <- ggplot(df.t2, aes(oge_aantal_maanden_gewoond)) + geom_histogram(bins=50) + xlim(0,750)
+# histogram alleen mutaties
+h2 <- ggplot(df.sub, aes(oge_aantal_maanden_gewoond)) + geom_histogram(bins=50) + xlim(0,750)
+grid.arrange(h1, h2, ncol = 1)
+```
+
+## Eerste poging survival curves
+
+Vervolgens maken we een plot met het cumulatieve aantal mutaties in de tijd. Na 800 maanden zijn alle woningen gemuteerd, en is de cumulatieve som van % gemuteerde woningen gelijk aan 1 (100%)
+
+```{r}
+df.survive <- aggregate(freq~oge_aantal_maanden_gewoond,df.sub,FUN="sum")
+df.survive$cumsum <- cumsum(df.survive$freq)
+df.survive$alive <- 1-df.survive$cumsum
+plot(cumsum~oge_aantal_maanden_gewoond, df.survive, type="l")
+```
+
+## Survival
+
+We kunnen met deze data een eerste serie survival curves maken. Hieronder laten we deze berekeningen zien. De bedoeling is om wat meer 'onder de motorkap te kijken' van survival functies in de 'survival' package. Hiermee kunnen we de 'black box' openen.
+
+```{r}
+# hoe ziet de survival curve eruit?
+plot(alive~oge_aantal_maanden_gewoond, df.survive, type="l", main="Survival curve", ylab="Percentage",lwd=2)
+
+```
+
+## Zelfde data op log schaal
+```{r}
+# is de survival kans constant in de tijd? (plot op log schaal)
+plot(alive~oge_aantal_maanden_gewoond, df.survive, type="l", log="y",main="Survival curve", ylab="log(percentage)",lwd=2)
+```
+
+## Model overlevingskans
+```{r}
+# zo ziet een model eruit van een tijdsonafhankelijke survival (rode lijn):
+plot(alive~oge_aantal_maanden_gewoond, df.survive, type="l", lwd=2)
+death.rate <- 1/mean(df.sub$oge_aantal_maanden_gewoond)
+surv.rate <- 1 - death.rate
+df.survive$model <- surv.rate^df.survive$oge_aantal_maanden_gewoond 
+lines(model~oge_aantal_maanden_gewoond,df.survive,lwd=2,col="red")
+
+```
+
+
+## Model op Log schaal
+```{r, warning=FALSE}
+# op log schaal
+plot(alive~oge_aantal_maanden_gewoond, df.survive, type="l", log="y",main="Survival curve", ylab="log(percentage)",lwd=2)
+lines(model~oge_aantal_maanden_gewoond,df.survive,col="red",lwd=2)
+legend("topright",c("Data","Model (time-invariant ev)"),lty=1,lwd=2, col=c("black","red"))
+```
+
+**Uitleg**
+In deze curves zien we een zwarte lijn (de echte data) en een rode lijn. De rode lijn geeft de survival curve weer als we ervan uitgaan dat de mutatiegraad onafhankelijk is van het aantal maanden dat iemand in een appartement woont. Dat wil zeggen: iedere woning heeft in een jaar dezelfde kans om te muteren, ongeacht hoe lang iemand er al woont.
+
+## Survival labels
+Tot slot vertalen we de mutaties naar 1en en 0en voor het survival analyse package:
+
+```{r}
+df.t2$oge_mutatie_label <- ifelse(df.t2$oge_mutatie_label=="mutatie",1,0)
+df.sub$oge_mutatie_label <- ifelse(df.sub$oge_mutatie_label=="mutatie",1,0)
+```
+
+## Survival data
+
+Hier gaan we echt los met de survival package:
+
+```{r}
+library(survival)
+library(KMsurv)
+library(ranger)
+library(ggplot2)
+library(dplyr)
+library(ggfortify)
+
+# maak een survival object van complete data (enkel de mutaties):
+my.surv.object <- Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label)
+my.surv.object
+
+```
+
+
+```{r}
+my.fit <- survfit(my.surv.object ~ 1)
+summary(my.fit)$surv # survival function
+plot(my.fit, main="Kaplan-Meier estimate with 95% conf. bounds",xlab="time", ylab="survival function")
+
+```
+
+## Zijn studenten anders?
+
+```{r}
+# kijken of er variabelen in de dataset zitten waarbij we verschillende survival curves kunnen herkennen:
+# we beginnen met studenten:
+my.fit1 <- survfit(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$oge_student # here the key is "student"
+  ) 
+autoplot(my.fit1, main="Comparing student/non-student",xlab="time", ylab="survival function")
+
+```
+
+## Woningtype
+```{r}
+# vervolgens kijken we naar woningtype
+df.sub <- df.sub[!df.sub$oge_oge_type%in%c("MA","ZW"),]
+my.fit2 <- survfit(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$oge_oge_type  # here the key is "type"
+  ) 
+autoplot(my.fit2, main="Comparing house types",xlab="time", ylab="survival function")
+```
+
+## Combinatie Student en Woningtype
+```{r}
+# en nu voor beiden:
+my.fit3 <- survfit(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$oge_student + df.sub$oge_oge_type 
+) 
+  #autoplot(my.fit3, main="Comparing two groups",xlab="time", ylab="survival function")
+plot(my.fit3, main="Comparing groups",xlab="time", ylab="survival function", col=c(1:length(my.fit3$strata)),lwd=2)
+legend("topright", legend=names(my.fit3$strata), col=c(1:length(my.fit3$strata)), lty=1, lwd=2)
+
+```
+
+
+## Jonge mensen
+
+```{r}
+# en voor jonge mensen (leeftijd < 36)
+df.sub$jonge_mensen <- ifelse(df.sub$leeftijd_ini<36,1,0)
+my.fit3 <- survfit(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$jonge_mensen + df.sub$oge_student# here the key is "jonge mensen"
+) 
+plot(my.fit3, main="Comparing groups",xlab="time", ylab="survival function", col=c(1:length(my.fit3$strata)),lwd=2)
+legend("topright", legend=names(my.fit3$strata), col=c(1:length(my.fit3$strata)), lty=1, lwd=2)
+
+```
+
+
+## Significante verschillen?
+```{r}
+# nu testen we of er significante verschillen zijn in survival functies:
+my.diff1 <- survdiff(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$oge_student      # obv studenten
+  )
+my.diff1
+my.diff2 <- survdiff(
+  Surv(df.sub$oge_aantal_maanden_gewoond, df.sub$oge_mutatie_label) ~ 
+    df.sub$oge_oge_type     # obv woningtype
+  )
+my.diff2
+```
+
+## Hazard functions {.columns-2}
+```{r}
+H.hat <- -log(my.fit1$surv) # maak hazard rate
+plot(my.fit1$time[H.hat!=Inf], H.hat[H.hat!=Inf], 
+     xlab="time", ylab="cumulative hazard rate", 
+     main="Cumulative hazard model", ylim=range(c(H.hat[H.hat!=Inf])),
+     type="s")
+H.hat <- -log(my.fit3$surv)
+plot(my.fit3$time[H.hat!=Inf], H.hat[H.hat!=Inf], 
+     xlab="time", ylab="cumulative hazard rate", 
+     main="Cumulative hazard model", ylim=range(c(H.hat[H.hat!=Inf])), 
+     type="s")
+```
+
+## Alternatief (Inverse hazard)
+```{r}
+# alternatief:
+plot(my.fit3, main="Inverse hazard",xlab="time", ylab="-Hazard", log="y",col=c(1:length(my.fit3$strata)),lwd=2)
+legend("topright", legend=names(my.fit3$strata), col=c(1:length(my.fit3$strata)), lty=1, lwd=2, cex=.8)
+```
+
+## Data preperation
+```{r}
+# Prepare new data frame for modeling
+df.sub2 <- df.sub[c("oge_aantal_maanden_gewoond","oge_mutatie_label", "oge_oge_type", "hrdr_samenstelling", "oge_student")]
+df.sub2  <- mutate(df.sub2,
+                type = as.factor(oge_oge_type),
+                t1 = oge_aantal_maanden_gewoond ,
+                d1 = oge_mutatie_label, 
+                samenstelling = as.factor(hrdr_samenstelling), 
+                student = as.factor(oge_student)
+)
+df.sub2 <- df.sub2 %>% select(t1,d1, type, samenstelling, student)
+row.names(df.sub2) <- 1:nrow(df.sub2)
+head(df.sub2)
+
+```
+
+## Kaplan Meier Survival curves
+
+```{r}
+# Kaplan-Meier Survival Curve
+y_bmt <- Surv(df.sub2$t1, df.sub2$d1)
+head(y_bmt) # surv() object
+
+# cox regressie functie
+form <- formula(y_bmt ~ type + samenstelling + student)
+cox_bmt <- coxph(form,data = df.sub2)
+summary(cox_bmt)
+```
+
+## Plot cox regressie
+```{r}
+cox_fit_bmt <- survfit(cox_bmt)
+autoplot(cox_fit_bmt, main="Survival model Cox Proportional Hazard")
+```
+
+
+## Resultaat
+We kunnen nu contracten of huurders een survival score geven op basis van een aantal kenmerken die ze bezitten. Of ze student zijn, in welk type woning ze verblijven, wat hun leeftijd is.
+
+Kunnen we dit resultaat gebruiken om een schatting te maken voor de investering per asset?

@@ -1,0 +1,230 @@
+---
+title: "Template Mutatie classificatie model"
+author: "Werkgroep Bigdata"
+date: "18 februari 2020"
+output:
+  ioslides_presentation: 
+    fig_height: 4
+    fig_retina: null
+    fig_width: 8
+    css: ../../stijl/dikw4aedes.css
+    logo: ../../logo/logo-aedes-2.png
+    smaller: yes
+    widescreen: yes
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE, cache = FALSE)
+
+setwd("~/r-studio/aedes-mutaties")
+```
+
+## Introductie
+In deze stap gaan we de classificatie taak verder uitwerken voor een mutatiegraad model.
+We gaan een point-in-time nemen en het kansvlaggetje voorspellen dat een contract het komende jaar zal muteren.
+
+## Data laden
+Uit de vorige stap kunnen we twee dataset gebruiken de test en trainings datasets.
+
+```{r}
+df <- read.csv("./data/mutaties13141516.csv",stringsAsFactors=TRUE)
+df.tst <- read.csv("./data/mutaties18.csv",stringsAsFactors=TRUE)
+```
+
+
+## Decision Trees
+
+```{r}
+require(rpart, quietly = TRUE)
+require(rpart.plot, quietly = TRUE)
+
+# unbalanced data !
+# base propensity is de kans op label wel niet muteren
+basepropensity <- mean(2-as.numeric(df$oge_mutatie_label))
+prior <- c(basepropensity,1-basepropensity)
+
+# we use prior in rpart
+# The order of probability should be exactly the same as the output of levels(data$y)
+#levels(df$oge_mutatie_label)
+
+m.tree <- rpart(oge_mutatie_label ~ . , 
+          data = df,
+          method = "class",
+          parms=list(prior=prior), # prior for classs inbalance
+          control = rpart.control(minbucket = 500,
+                                  maxdepth=3,
+                                  cp=-1 # split at any cost
+                                  )
+          )
+
+```
+
+## Beslisboom resultaat
+
+Voor meer details over plotten en rules zie [hier](http://www.milbo.org/doc/prp.pdf)
+```{r, fig.width=8, fig.height=4, fig.align='center'}
+rpart.plot(m.tree,extra = 4,cex=0.6)
+```
+
+## Rules{.smaller}
+
+```{r}
+rpart.rules(m.tree, clip.facs = TRUE, cover = TRUE, extra = 4)
+```
+
+
+## Correlatie : Co-lineariteit checken
+
+Voor een linear-regressie model is het van belang dat de verklarende variabelen niet al te zwaar gecorreleerd zijn.
+
+```{r,fig.width=4, fig.height=3}
+require(GGally, quietly = TRUE)
+df.c <- cor(df[c("calc_prijs_per_m2","hrdr_leeftijd_contractant", 
+                 "oge_aantal_maanden_gewoond","huur_subsidiabele_huur_incl_btw",
+                 "pv_totaal_punten_afgerond","pv_bouwjaar")],method = "spearman")
+
+ggcorr(df.c, nbreaks = 9, label = FALSE, label_size = 2, color = "grey50")
+```
+
+## Logistic regression
+
+Logistiche regressie is nog steeds een heel veel gebruikte techniek.
+Grote voordeel is dat de bijdrage van iedere verklarende variabele onafhankelijk van elkaar kan worden geinterpreteerd en dat de uitkomst een kans is.
+```{r}
+# fit model
+m.glm <- glm(oge_mutatie_label ~ scale(oge_aantal_maanden_gewoond) +
+              log10(huur_subsidiabele_huur_incl_btw+1) + oge_oge_type +
+              scale(hrdr_leeftijd_contractant) + oge_student, 
+          data = df, 
+          family = binomial )
+
+```
+
+## Model summary
+```{r}
+summary(m.glm)
+#backwards = step(m.glm)
+```
+
+## Validatie van het classificatie model
+```{r}
+# we validate the model against the validation data
+glm.predicted <- predict(m.glm, newdata = df.tst, type="response",se.fit=FALSE) # type = "response" gives probabilities
+
+# confusion matrix
+# create a class outcome based on cut-off being the base propensity
+base.prop.tst <- prop.table(table(df.tst$oge_mutatie_label))[2] # basic R table magic
+# stratified propensity on training data
+base.prop.trn <- prop.table(table(df$oge_mutatie_label))[2] # basic R table magic
+pred.class <- (glm.predicted > base.prop.trn)
+
+# confusion matrix
+table(as.numeric(pred.class),df.tst$oge_mutatie_label)
+
+```
+
+Wat valt je op?
+
+
+## ROC curves
+
+```{r, fig.width=4, fig.height=4, fig.align='center'}
+library(ROCR)
+glm.pred <- prediction(glm.predicted,df.tst$oge_mutatie_label)
+glm.perf <- performance(glm.pred, "tpr", "fpr")
+
+# ROC curve
+op<-par(no.readonly=TRUE) #this is done to save the default settings 
+par(cex.lab=0.5,cex.axis=0.3)
+plot(glm.perf, col="red", lwd= 2, main= "ROC curve")
+abline(0, 1, untf = FALSE, col = "lightgray", lty = 2)
+par(op) #re-set the plot to the default settings
+```
+
+## Validatie beslisboom
+
+```{r}
+library(ROCR)
+
+dt.predicted <- predict(m.tree, newdata = df.tst)#, type="class")
+dt.pred <- prediction(dt.predicted[,2],df.tst$oge_mutatie_label)
+dt.perf <- performance(dt.pred, "tpr", "fpr")
+
+base.prop.trn <- prop.table(table(df$oge_mutatie_label))[2] # basic R table magic
+pred.class <- (dt.predicted[,2] > base.prop.trn)
+
+# confusion matrix
+table(as.numeric(pred.class),df.tst$oge_mutatie_label)
+
+```
+
+## Random Forest
+Een random-forest maakt een heel bos van beslisbomen.
+```{r}
+library(randomForest)
+
+# more generic approach
+rf.formula <- as.formula("oge_mutatie_label ~ oge_aantal_maanden_gewoond +
+              huur_subsidiabele_huur_incl_btw + hrdr_samenstelling +
+              oge_oge_type +
+              hrdr_leeftijd_contractant + oge_student")
+
+# build rf model 
+m.rf <- randomForest(rf.formula, df) 
+# random forests work best on stratified training data, blcd stands for balanced
+m.rf.blcd <- randomForest(rf.formula, df, sampsize = c(1000,1000) )
+```
+## Variabele importance
+
+Deze plot laat zien hoe belangrijk individuele verklarende variabelen zijn. De plot wordt gemaakt door de prestatie van het bs te vergelijken met hetzelfde bos maar dan zonder alle bomen waarin die verklarende variabele zit. Het verschil is dus hoeveel de prestatie afneemt als we die verklarende variabele niet gebruiken. 
+```{r}
+varImpPlot(m.rf.blcd)
+```
+
+## Validatie random forest
+```{r}
+library(ROCR)
+# run model agains test data
+rf.predicted <- predict(m.rf.blcd, newdata = df.tst, type = 'prob')
+rf.pred <- prediction(rf.predicted[,2], df.tst$oge_mutatie_label)
+rf.perf <- performance(rf.pred, "tpr", "fpr")
+```
+
+
+## ROC curves
+```{r, fig.width=4, fig.height=4, fig.align='center'}
+# ROC curve
+plot(glm.perf, avg= "threshold", col="blue", lwd= 2, main= "ROC curve")
+abline(0, 1, untf = FALSE, col = "lightgray", lty = 2)
+# plot ROC curve of tree model
+plot(dt.perf, add=TRUE, col='Green', lwd= 2, main= "ROC curve")
+# plot ROC curve of random forest model
+plot(rf.perf, add=TRUE, col='Orange', lwd= 2, main= "ROC curve")
+```
+
+## Business case
+
+```{r, fig.height=3}
+# cost matrix in euros [TP FP, FN TN]
+m.cost <- matrix(c(1, -.1, -.1, 0), nrow = 2, ncol =2)
+
+pred <- rf.pred
+m.pred <- cbind(pred@tp[[1]], pred@fp[[1]], pred@fn[[1]], pred@tn[[1]])
+
+business.case <- m.pred %*% as.vector(m.cost) # sum all margins
+
+plot(sort(pred@cutoffs[[1]]),business.case, 
+     type='l', col='blue',
+     main='Businesscase',xlab='cutoff',ylab='Euro')
+abline(0, 0, col = "lightgray", lty = 2)
+```
+
+## Resultaat
+Als resultaat van deze stap hebben we een aantal model technieken op deze dataset los gelaten en getest op de test set. De resultaten zijn gepresenteerd in een zogenaamde confusion matrix en in een ROC curve.
+
+Met een simpele evaluatie van de confusion matrix kunnen we een businesscase doorrekenen.
+
+Voor de toepassing in het onderhoudsvraagstuk en dus de investering per asset lijkt deze aanpak beperkt bruikbaar.
+
+We gaan verder onderzoeken of een survival analyse een meer toepasbaar resultaat kan opleveren op asset niveau.
