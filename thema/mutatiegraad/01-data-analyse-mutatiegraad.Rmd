@@ -8,7 +8,7 @@ output:
     fig_retina: null
     fig_width: 10
     css: ../../stijl/dikw4aedes.css
-    logo: ../../logo/logo-aedes-2.png
+    logo: ../../logo/logo-aedes.svg
     smaller: yes
     widescreen: yes
     highlight: tango
