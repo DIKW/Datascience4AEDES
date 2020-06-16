@@ -1,0 +1,190 @@
+---
+title: "Template Mutatie Businesscase"
+author: "Werkgroep Bigdata"
+date: "17 juni 2020"
+output:
+  ioslides_presentation: 
+    fig_height: 4
+    fig_retina: null
+    fig_width: 8
+    css: ../../stijl/dikw4aedes.css
+    logo: ../../logo/logo-aedes.svg
+    smaller: yes
+    widescreen: yes
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE, cache = FALSE)
+
+setwd("~/r-studio/aedes-mutaties")
+```
+
+## Doel
+
+Kunnen we investerings budget voorspellen met de input van een classificatie model of een survival model per huishouden?
+
+
+## Aanpak
+
+Data van de contracten / huurders per asset(gebouw) nodig.
+Huidige model : Verwachte investering is gelijk aan investering afgelopen jaar.
+
+Kunnen we dit "nulde orde" model verbeteren door de kennis over de huurders te gebruiken?
+
+---
+
+```{r}
+require(dplyr)
+require(farff)
+
+# data laden
+df <- read.csv("./data/mutaties13141516.csv",stringsAsFactors=TRUE)
+#df.tst <- read.csv("./data/mutaties18.csv",stringsAsFactors=TRUE)
+
+# training data 2013 t/m 2016
+#df.tst.2020 = readARFF("./data/verhuurmutaties_mutaties_test_2020.arff")
+df.tst.2018 = readARFF("./data/verhuurmutaties_mutaties_test_2018.arff")
+
+df.tst <- df.tst.2018
+
+# as factors
+df$hrdr_samenstelling <- as.factor(df$hrdr_samenstelling)
+df$oge_student <- as.factor(df$oge_student)
+df.tst$hrdr_samenstelling <- as.factor(df.tst$hrdr_samenstelling)
+df.tst$oge_student <- as.factor(df.tst$oge_student)
+# mutatie label van factor naar 0/1
+df$oge_mutatie_label <- ifelse(df$oge_mutatie_label=="mutatie",1,0)
+df.tst$oge_mutatie_label <- ifelse(df.tst$oge_mutatie_label=="mutatie",1,0)
+
+# filter levels
+df.tst <- df.tst %>% filter(oge_oge_type %in% levels(df$oge_oge_type))
+df.tst <- df.tst %>% filter(hrdr_samenstelling %in% levels(df$hrdr_samenstelling))
+
+#dim(df.tst[complete.cases(df.tst),])
+
+```
+
+
+## Survival model per huurder
+Uit stap 3 kennen we de survival rate per huureder (als een proportional hazard)
+```{r}
+require(survival)
+# survival object
+y <- Surv(df$oge_aantal_maanden_gewoond, df$oge_mutatie_label)
+# cox regressie functie
+form <- formula(y ~ oge_oge_type + hrdr_samenstelling + oge_student)
+cox_bmt <- coxph(form, data = df)
+summary(cox_bmt)
+```
+
+## Predict proportional hazard
+```{r}
+# predict hazard van 6 rijen uit onze dataset
+predict(cox_bmt,newdata=tail(df.tst))
+```
+
+## Classificatie model kans op weggaan komend jaar
+
+Het randomforest model gaf de beste schatting voor de kans dat iemand zou gaan muteren
+```{r}
+library(randomForest)
+
+# more generic approach
+rf.formula <- as.formula("as.factor(oge_mutatie_label) ~ oge_oge_type + hrdr_samenstelling + oge_student + huur_subsidiabele_huur_incl_btw + oge_aantal_maanden_gewoond + hrdr_leeftijd_contractant")
+
+# build rf model 
+# random forests work best on stratified training data, blcd stands for balanced
+## LETOP voor nu ivm factors op de df.tst gefit !!!
+m.rf.blcd <- randomForest(rf.formula, df.tst, sampsize = c(1000,1000) )
+```
+## Probability mutatie kans
+
+```{r}
+predict(m.rf.blcd, newdata = tail(df.tst), type = 'prob')
+```
+
+## Onderhoudskosten per cluster
+
+```{r}
+library(readr)
+Instandhoudingskosten_2019_2020 <- read_delim("./data/Instandhoudingskosten-2019-2020.csv",
+";", escape_double = FALSE, col_types = cols(Grootboekrekeningnr = col_skip(),
+Bedrijfsboekingsgroep = col_skip(),
+`Btw-bedrijfsboekingsgroep` = col_skip(),
+Broncode = col_skip()), trim_ws = TRUE)
+# datum
+Instandhoudingskosten_2019_2020$Boekingsdatum <- as.Date(Instandhoudingskosten_2019_2020$Boekingsdatum, format="%d-%m-%y")
+```
+
+
+## Agregeren per cluster
+```{r}
+require(dplyr)
+# cluster= OGE_PMC_NR
+# filter 2019
+df.cluster.bedrag <- Instandhoudingskosten_2019_2020 %>% 
+    filter(Boekingsdatum <= '2020-01-01') %>% 
+    select(OGE_PMC_NR, Bedrag) %>%
+    group_by(OGE_PMC_NR) %>% summarize(sum_bedrag=sum(Bedrag)) %>%
+        rename(oge_pmc_nr=OGE_PMC_NR)
+```
+
+## Merge cluster met eenheid
+
+```{r}
+# dataset 2018
+# tellen aantal eenheden per cluster
+df.cluster.aantal <- df.tst.2018 %>% select(oge_pmc_nr) %>% group_by(oge_pmc_nr) %>% summarize(aantal=n())
+```
+
+
+```{r}
+df.cluster.bedrag <- merge(df.cluster.bedrag,df.cluster.aantal,all.x = TRUE) %>% 
+    replace(is.na(.), 0) %>%
+    mutate(bedrag_per_eenheid = sum_bedrag/aantal)
+```
+
+## Uitscoren
+```{r}
+df.tst$hazard <- predict(cox_bmt,newdata=df.tst)
+df.tst$prob <- predict(m.rf.blcd, newdata = df.tst, type = 'prob')[,2]
+
+df.tmp <- df.tst %>% select(oge_pmc_nr,hazard,prob)
+
+# element level koppelen aan cluster level
+df.cluster <- merge(df.cluster.bedrag, df.tmp, by="oge_pmc_nr") %>% group_by(oge_pmc_nr) %>% 
+    select(hazard, prob, bedrag_per_eenheid) %>%
+    summarize(avg_hazard=mean(hazard),
+              avg_prob=mean(prob),
+              avg_bedrag_per_eenheid=mean(bedrag_per_eenheid))
+
+```
+
+## De hamvraag {.columns-2}
+
+Is de schatting op eenheid niveau bruikbaar voor een verklaring van de kosten op clusterniveau?
+
+```{r, fig.width=6}
+require(ggplot2)
+ggplot(df.cluster, aes(x=avg_hazard, y=avg_bedrag_per_eenheid)) + 
+    geom_point(alpha=0.4) + scale_y_log10() + 
+    geom_smooth(method=loess) + xlim(-0.4,0)
+```
+
+
+```{r, fig.width=6}
+ggplot(df.cluster, aes(x=avg_prob, y=avg_bedrag_per_eenheid)) + 
+    geom_point(alpha=0.4) + scale_y_log10() + 
+    geom_smooth(method=loess) 
+
+```
+
+## Simpele regressie models
+
+```{r}
+m.h <- lm(log(avg_bedrag_per_eenheid)~avg_hazard, data=df.cluster)
+m.p <- lm(log(avg_bedrag_per_eenheid)~avg_prob, data=df.cluster)
+summary(m.p)
+```
+

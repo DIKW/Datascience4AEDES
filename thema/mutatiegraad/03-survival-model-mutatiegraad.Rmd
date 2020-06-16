@@ -300,7 +300,7 @@ cox_bmt <- coxph(form,data = df.sub2)
 summary(cox_bmt)
 ```
 
-## Plot cox regressie
+## Plot cox proportional hazard regressie
 ```{r}
 cox_fit_bmt <- survfit(cox_bmt)
 autoplot(cox_fit_bmt, main="Survival model Cox Proportional Hazard")

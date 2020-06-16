@@ -63,8 +63,8 @@ m.tree <- rpart(oge_mutatie_label ~ . ,
 ## Beslisboom resultaat
 
 Voor meer details over plotten en rules zie [hier](http://www.milbo.org/doc/prp.pdf)
-```{r, fig.width=8, fig.height=4, fig.align='center'}
-rpart.plot(m.tree,extra = 4,cex=0.6)
+```{r, fig.width=8, fig.height=5, fig.align='center'}
+rpart.plot(m.tree,extra = 4,cex=0.8)
 ```
 
 ## Rules{.smaller}
@@ -78,7 +78,7 @@ rpart.rules(m.tree, clip.facs = TRUE, cover = TRUE, extra = 4)
 
 Voor een linear-regressie model is het van belang dat de verklarende variabelen niet al te zwaar gecorreleerd zijn.
 
-```{r,fig.width=4, fig.height=3}
+```{r,fig.width=5, fig.height=5,fig.align='center'}
 require(GGally, quietly = TRUE)
 df.c <- cor(df[c("calc_prijs_per_m2","hrdr_leeftijd_contractant", 
                  "oge_aantal_maanden_gewoond","huur_subsidiabele_huur_incl_btw",
@@ -205,9 +205,9 @@ plot(rf.perf, add=TRUE, col='Orange', lwd= 2, main= "ROC curve")
 
 ## Business case
 
-```{r, fig.height=3}
+```{r}
 # cost matrix in euros [TP FP, FN TN]
-m.cost <- matrix(c(1, -.1, -.1, 0), nrow = 2, ncol =2)
+m.cost <- matrix(c(5, -.1, -.1, 0), nrow = 2, ncol =2)
 
 pred <- rf.pred
 m.pred <- cbind(pred@tp[[1]], pred@fp[[1]], pred@fn[[1]], pred@tn[[1]])
