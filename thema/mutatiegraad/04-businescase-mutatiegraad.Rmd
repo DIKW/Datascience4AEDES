@@ -122,9 +122,9 @@ Instandhoudingskosten_2019_2020$Boekingsdatum <- as.Date(Instandhoudingskosten_2
 ```{r}
 require(dplyr)
 # cluster= OGE_PMC_NR
-# filter 2019
+# filter 2019 en Verhuurgereed (mutatiekoten)
 df.cluster.bedrag <- Instandhoudingskosten_2019_2020 %>% 
-    filter(Boekingsdatum <= '2020-01-01') %>% 
+    filter(Boekingsdatum <= '2020-01-01')  %>%
     select(OGE_PMC_NR, Bedrag) %>%
     group_by(OGE_PMC_NR) %>% summarize(sum_bedrag=sum(Bedrag)) %>%
         rename(oge_pmc_nr=OGE_PMC_NR)
