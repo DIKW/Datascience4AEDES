@@ -17,7 +17,9 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE, cache = FALSE)
 
-setwd("~/r-studio/aedes-mutaties")
+# aanpassen naar het lokale pad
+setwd("~/git/Datascience4AEDES/thema/mutatiegraad")
+
 ```
 
 ## Introductie
@@ -273,15 +275,23 @@ legend("topright", legend=names(my.fit3$strata), col=c(1:length(my.fit3$strata))
 ## Data preperation
 ```{r}
 # Prepare new data frame for modeling
-df.sub2 <- df.sub[c("oge_aantal_maanden_gewoond","oge_mutatie_label", "oge_oge_type", "hrdr_samenstelling", "oge_student")]
-df.sub2  <- mutate(df.sub2,
+df.sub.s <- df.sub[c("oge_aantal_maanden_gewoond","oge_mutatie_label", "oge_oge_type", "hrdr_samenstelling", "oge_student","hrdr_leeftijd_contractant")]
+df.sub2  <- mutate(df.sub.s,
                 type = as.factor(oge_oge_type),
                 t1 = oge_aantal_maanden_gewoond ,
                 d1 = oge_mutatie_label, 
                 samenstelling = as.factor(hrdr_samenstelling), 
-                student = as.factor(oge_student)
-)
-df.sub2 <- df.sub2 %>% select(t1,d1, type, samenstelling, student)
+                student = as.factor(oge_student),
+                hrdr_leeftijd_contractant.scaled = scale(hrdr_leeftijd_contractant)
+            ) %>%
+  filter(type=='EW' | type=='AP',
+         samenstelling != '3')
+
+# drop unused levels
+df.sub2$samenstelling <- droplevels(df.sub2$samenstelling)
+df.sub2$type <- droplevels(df.sub2$type)
+
+df.sub2 <- df.sub2 %>% select(t1,d1, type, samenstelling, student,hrdr_leeftijd_contractant.scaled)
 row.names(df.sub2) <- 1:nrow(df.sub2)
 head(df.sub2)
 
@@ -295,15 +305,50 @@ y_bmt <- Surv(df.sub2$t1, df.sub2$d1)
 head(y_bmt) # surv() object
 
 # cox regressie functie
-form <- formula(y_bmt ~ type + samenstelling + student)
-cox_bmt <- coxph(form,data = df.sub2)
-summary(cox_bmt)
+form <- formula(Surv(t1, d1==1) ~ type + samenstelling + strata(student) + hrdr_leeftijd_contractant.scaled)
+#cox_model <- coxph(Surv(t1, d1==1) ~ type + samenstelling + student + hrdr_leeftijd_contractant.scaled,data = df.sub2, model = TRUE)
+cox_model <- coxph(form,data = df.sub2, model = TRUE)
+summary(cox_model)
 ```
 
 ## Plot cox proportional hazard regressie
+
 ```{r}
-cox_fit_bmt <- survfit(cox_bmt)
+cox_fit_bmt <- survfit(cox_model)
 autoplot(cox_fit_bmt, main="Survival model Cox Proportional Hazard")
+```
+
+## Hoe het resultaat te gebruiken?
+
+```{r}
+# The survival function does not return rates. 
+# Rates are counts/number_at_risk/unit_time. 
+# Survival functions return proportions. 
+# So 0.20 is the expected number of events for a cohort with the features entered in the newdata argument.
+
+# type + samenstelling + student + hrdr_leeftijd_contractant.scaled
+newdf <- df.sub2[999,]
+# change inputs
+newdf$type='AP'
+newdf$hrdr_leeftijd_contractant.scaled=0
+newdf$student='1'
+newdf$t1 = 45
+
+predict(cox_model, 
+        #newdata=list(time=100,samenstelling=1,type="EW",student=0, hrdr_leeftijd_contractant.scaled=0),
+        newdata = newdf,
+        type =  "expected", 
+        se.fit=TRUE)
+
+# more on type see predict.coxph:
+# Type of predicted value. 
+# Choices are the linear predictor ("lp"), 
+# the risk score exp(lp) ("risk"), 
+# the expected number of events given the covariates and follow-up time ("expected"),
+# and the terms of the linear predictor ("terms"). 
+# The survival probability for a subject is equal to exp(-expected).
+exp(-0.074)
+
 ```
 
 
