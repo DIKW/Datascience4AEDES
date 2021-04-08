@@ -15,4 +15,4 @@ Voor ieder thema is er [een wiki pagina beschikbaar](https://github.com/DIKW/Dat
 
 Hopelijk volgen er snel meer thema's die we hier gezamenlijk op een hoger gemeenschappelijk niveau kunnen brengen.
 
-We zijn begonnen!
+We zijn begonnen aan nieuwe ontwikkelingen
