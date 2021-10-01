@@ -1,0 +1,474 @@
+---
+title: ' Woonfraude Analyse'
+author: "Diane van Herpen,          Jasper Meekels,         Jean Paul Oudenaarden"
+date: "27 mei 2021"
+output:
+
+  ioslides_presentation:
+    fig_height: 3
+    fig_width: 5
+
+    standalone: yes
+    widescreen: yes
+    smaller: true
+---
+
+
+  Woonfraude| probleemstelling{data-background=https://www.denheldersdagblad.nl/image/3083_2804_1200_1200.jpg data-background-size=cover}
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set( include = TRUE, warning = FALSE, message = FALSE, eval = TRUE)
+```
+
+## Businesscase
+
+Stel je voor dat we een datascience model kunnen ontwikkelen dat voorspelt wat de kans is dat er sprake is van woonfraude op een bepaald adres. 
+
+Woonfraude definiëren we daarbij als: 
+**De hoofdhuurder heeft niet zijn hoofdverblijf in de woning**. 
+
+Met een datascience analyse beogen we op basis van verschillende kenmerken:
+
+1. Het aantal onnodige onderzoeken te reduceren 
+
+2. Willen we adressen kunnen onderscheiden met een verhoogd risico op woonfraude om onderzoek door medewerkers effectiever te laten zijn. 
+
+De analyse leidt tot een kans op woonfraude per adres op basis waarvan de beslissing genomen kan worden om wel of niet de casus te gaan onderzoeken. 
+
+## Dataset  
+
+De dataset is afkomstig van Stichting Thuisvester en bevat geanonimiseerde data over 347 onderzoeksdossiers naar woonfraude uit de periode 2013-2020, met o.a. als variabelen woonduur, inkomen bij woningtoewijzing, aantal reparatieverzoeken sinds ingang huurcontract, tijd sinds laatste wijziging betaalwijze, netto huur, bouwjaar, leeftijd hoofdhuurder, huishoudgrootte en eventuele aanvragen woningruil/huisbewaring.
+
+
+``` {r  echo= FALSE,  message=FALSE, warning=FALSE}
+
+# Laden van de noodzakelijke libraries
+# Tip: laad alleen de libraries die je echt nodig hebt
+require(readxl)
+
+#Working directory goed zetten(in de woonfraude folder)
+setwd("~/git/Datascience4AEDES/thema/woonfraude")
+#setwd("D:/Documenten/Werk/Aedes datascience codingtrack/Fraude analyse")
+
+#Laden van de data
+df.org <- read_xlsx("./data/Data.xlsx")
+```
+
+```{r}
+# Tip : leer jezelf aan het laden van de bibliotheken daar te doen waar je ze nodig hebt
+library(janitor)
+
+# De kolomnamen schonen van spaties en leestekens t.b.v. leesbaarheid
+df <- clean_names(df.org)
+
+```
+
+## Filter relevante kolommen
+
+```{r }
+require(dplyr)
+
+# Welke kolommen/variabelen zijn voor de vraagstelling relevant? 
+# Daartoe filteren we het dataframe.
+
+df.filtered <- df %>% select(woonfraude_aangetoond,
+              ingangsdatum_huurcontract,
+              huishoudgrootte,
+              inkomenstoets_bij_ingang,
+              geboortedatum_hoofdhuurder,
+              aantal_wijzigingen_betaalwijze_sinds_ingang_hc,
+              aantal_reparatieverzoeken_eenheid_sinds_ingang_hc,
+              aantal_interactielogposten_huisbewaring_woonruilverzoeken,
+              oppervlakte,
+              bouwjaar,
+              netto_huur,
+              maand_laatste_wijziging_betaalwijze)
+```
+
+``` {r}
+# Korte samenvatting van het gefilterde dataframe
+summary(df.filtered)
+```
+
+## Missende waarden
+
+```{r}
+# bevat kNN() impute
+library(VIM)
+
+# Er ontbreken soms waarden van de inkomenstoets bij ingang, 
+# door middel van de techniek Imputing de ontbrekende waarden genereren 
+# met behulp van K Nearest Neighbor
+df.knn.imputed <- kNN(df.filtered, c("inkomenstoets_bij_ingang"))
+hist(df.knn.imputed$inkomenstoets_bij_ingang, breaks=250)
+```
+
+
+## Verdere exploratie dataset
+
+```{r include=FALSE}
+# Korte samenvatting van het dataframe
+summary(df.knn.imputed)
+
+# De gefilterde en geimputeerde data weer als hét dataframe voor het vervolg instellen
+df <- df.knn.imputed
+```
+
+```{r}
+# Wat voor variabelen typen zitten er in de data?
+lapply(df,class)
+```
+## Verdere exploratie dataset 2
+
+```{r}
+# Tonen  van de eerste waarden op alle kolommen om een gevoel bij de data te krijgen
+head(df, n=5)
+```
+## Basale kansverdeling woonfraude op complete dataset
+```{r}
+# Kruistabel op de hoofdconclusie: was er sprake van woonfraude of niet?
+t <- table(df$woonfraude_aangetoond)
+prop.table(t)
+```
+
+## Data wrangling
+```{r}
+# Datums omzetten naar correcte datumformats
+df$ingangsdatum_huurcontract <- as.Date(df$ingangsdatum_huurcontract)
+df$geboortedatum_hoofdhuurder <- as.Date(df$geboortedatum_hoofdhuurder)
+
+# Resetten als factor and relevellen
+df$woonfraude_aangetoond <- as.factor(df$woonfraude_aangetoond)
+df$woonfraude_aangetoond <- relevel(df$woonfraude_aangetoond,"Nee")
+
+# Velden met kalenderdatums relatief maken, omdat tijdspanne in datascience wel iets zegt maar absolute momenten niet
+df$rel_aant_dagen_laatste_wijz_betaalwijze <- as.numeric(Sys.Date()- as.Date(df$maand_laatste_wijziging_betaalwijze))
+df$rel_geboortedatum_hoofdhuurder <- as.numeric(Sys.Date() - as.Date(df$geboortedatum_hoofdhuurder))
+df$rel_aantal_dagen_contract<- as.numeric(Sys.Date() - as.Date(df$ingangsdatum_huurcontract))
+
+```
+
+---
+
+### meer wrangling
+
+```{r}
+# Schalen van variabelen om ze onderling vergelijkbaar te maken
+# Min gemiddelde , gedeeld door standaard deviatie leverd een zogenaamde z-score
+df$inktoets.sc <- scale(df$inkomenstoets_bij_ingang)
+df$nettohuur.sc <-scale(df$netto_huur)
+df$bouwjaar.sc <- scale(df$bouwjaar)
+df$huishoudgrootte.sc <- scale(df$huishoudgrootte)
+df$aantal_reparatieverzoeken_eenheid_sinds_ingang_hc.sc <- scale(df$aantal_reparatieverzoeken_eenheid_sinds_ingang_hc)
+df$aantal_interactielogposten_huisbewaring_woonruilverzoeken.sc <- scale(df$aantal_interactielogposten_huisbewaring_woonruilverzoeken)
+df$oppervlakte.sc <-scale(df$oppervlakte)
+
+# Welke kolommen/variabelen zijn voor de vraagstelling relevant? Daartoe filteren we het dataframe.
+df <- df %>% select(woonfraude_aangetoond,
+                    rel_aant_dagen_laatste_wijz_betaalwijze,
+                    rel_geboortedatum_hoofdhuurder,
+                    rel_aantal_dagen_contract,
+                    inktoets.sc,
+                    nettohuur.sc,
+                    bouwjaar.sc,
+                    huishoudgrootte.sc,
+                    aantal_reparatieverzoeken_eenheid_sinds_ingang_hc.sc,
+                    aantal_interactielogposten_huisbewaring_woonruilverzoeken.sc)
+```
+
+
+## Bouwen van het model!
+
+Eerste de dataset opsplitsen in training en validatie deel
+```{r}
+# Kies een seed voor de randomizer als je herhaalbare trainings en validatie set wilt hebben
+set.seed(1234)
+# De data splitsen in een training en een validatie set
+proportion.trn <- 0.7
+index <- sample(1:nrow(df),round(proportion.trn*nrow(df)))
+df.trn <- df[index,]
+df.vld <- df[-index,]
+```
+
+## Random Forest
+
+```{r }
+library(randomForest)
+
+# Zoeken naar de beste gecombineerde functie van variabelen door het maken van een Random #Forest
+rf.formula <- as.formula(woonfraude_aangetoond ~ .)
+m.rf.woonfraude <- randomForest(rf.formula, df.trn,) 
+
+```
+
+```{r, fig.width=8}
+# Het plotten van de resultaten: welke variabelen hebben veel invloed ?
+varImpPlot(m.rf.woonfraude)
+```
+
+## Evaluatie Random Forest
+```{r, fig.height=4, fig.width=4}
+# De Random Forest runnen op de validatie data en kijken hoeveel 
+# vals positieve inschattingen het model maakt. 
+m.rf.predicted <- predict(m.rf.woonfraude, newdata = df.vld, type = 'prob')
+m.rf.pred <- ROCR::prediction(m.rf.predicted[,1],df.vld$woonfraude_aangetoond)
+m.rf.perf <- ROCR::performance(m.rf.pred, "tpr", "fpr")
+plot(m.rf.perf, col='Red')
+abline(0,1,col="gray60",lty=2)
+```
+
+## Beslisbomen met Rpart
+
+We gebruiken hier alleen de variabelen waarvan de random forest ze belangrijk vond.
+
+```{r}
+require(rpart)
+require(rpart.plot)
+# 1.Beslisboom op basis van aantal dagen sinds wijziging betaalwijze en inkomenstoets bij ingang.
+formule1 = as.formula("woonfraude_aangetoond ~ rel_aant_dagen_laatste_wijz_betaalwijze + inktoets.sc")
+m.dt.woonfraude <- rpart(formule1, data = df.trn, method = "class")
+rpart.plot(m.dt.woonfraude)
+```
+
+##  Snoeien van de beslisboom 1 overfit of underfit
+
+Kijken naar de complexiteit parameter, zodat we kunnen zien hoe groot de boom moet worden.
+```{r}
+m.dt.woonfraude.groot <- rpart(formule1, 
+                            data = df.trn, 
+                            method = "class",
+                            control = rpart.control(minsplit = 2, xval = 250, cp = 0.0001)
+                            )
+
+plotcp(m.dt.woonfraude.groot)
+```
+
+## Vervolg
+
+```{r}
+m.dt.woonfraude.p <- prune(m.dt.woonfraude, cp=0.021) 
+par(mfrow=c(1,2))
+rpart.plot(m.dt.woonfraude.groot,main="Full tree model")
+```
+
+## Gesnoeide boom model 1
+
+```{r}
+rpart.plot(m.dt.woonfraude.p, main="Pruned tree")
+```
+
+## Beslisboom op basis van alle variabelen.
+
+```{r} 
+m.dt.woonfraude.2 <- rpart(woonfraude_aangetoond ~ .,data = df.trn, method = "class")
+rpart.plot(m.dt.woonfraude.2)
+```
+
+##  Snoeien van de beslisboom 2 overfit of underfit
+
+```{r}
+m.dt.woonfraude.2.groot <- rpart(woonfraude_aangetoond ~ ., 
+                            data = df.trn, 
+                            method = "class",
+                            control = rpart.control(minsplit = 2, xval = 200, cp = 0)
+                            )
+plotcp(m.dt.woonfraude.2.groot)
+```
+
+## Vervolg
+
+Hier heb je nu een interesante keuz, bij een cp van 0.037 heb je maar drie blaadjes. Bij cp=0.021 heb je er 18.
+```{r}
+m.dt.woonfraude.2.p <- prune(m.dt.woonfraude.2, cp=0.021) 
+par(mfrow=c(1,2))
+rpart.plot(m.dt.woonfraude.2.groot,main="Full tree model")
+```
+
+## Gesnoeide boom model 2
+```{r}
+rpart.plot(m.dt.woonfraude.2.p, main="Pruned tree")
+```
+
+## Beslisboom op basis van TOP 3
+```{r}
+formule3 = woonfraude_aangetoond ~ bouwjaar.sc + 
+  inktoets.sc + rel_aant_dagen_laatste_wijz_betaalwijze
+m.dt.woonfraude.3 <- rpart(formule3,data = df.trn, method = "class")
+rpart.plot(m.dt.woonfraude.3)
+```
+
+
+## Beslisboom op basis van TOP 5
+```{r}
+formule4 = woonfraude_aangetoond ~ rel_aantal_dagen_contract + bouwjaar.sc + 
+  inktoets.sc + rel_aant_dagen_laatste_wijz_betaalwijze + nettohuur.sc
+m.dt.woonfraude.4 <- rpart(formule4,data = df.trn, method = "class")
+rpart.plot(m.dt.woonfraude.4)
+```
+
+
+## Performance van het model 1
+
+```{r}
+require(ROCR)
+m.dt.predicted <- predict(m.dt.woonfraude, newdata = df.vld, type = 'prob')
+m.dt.pred <- prediction(m.dt.predicted[,1],df.vld$woonfraude_aangetoond)
+m.dt.perf <- performance(m.dt.pred, "tpr", "fpr")
+plot(m.dt.perf, col='Red')
+abline(0,1,col="gray60",lty=2)
+
+```
+
+## ROC van alle modellen in één grafiek
+
+```{r echo= FALSE}
+#dm woonfraude2
+m.dt.predicted.2 <- predict(m.dt.woonfraude.2, newdata = df.vld, type = 'prob')
+m.dt.pred.2 <- prediction(m.dt.predicted.2[,1],df.vld$woonfraude_aangetoond)
+m.dt.perf.2 <- performance(m.dt.pred.2, "tpr", "fpr")
+#dm woonfraude2 pruned
+m.dt.predicted.2p <- predict(m.dt.woonfraude.2.p, newdata = df.vld, type = 'prob')
+m.dt.pred.2p <- prediction(m.dt.predicted.2p[,1],df.vld$woonfraude_aangetoond)
+m.dt.perf.2p <- performance(m.dt.pred.2p, "tpr", "fpr")
+#dm woonfraude3
+m.dt.predicted.3 <- predict(m.dt.woonfraude.3, newdata = df.vld, type = 'prob')
+m.dt.pred.3 <- prediction(m.dt.predicted.3[,1],df.vld$woonfraude_aangetoond)
+m.dt.perf.3 <- performance(m.dt.pred.3, "tpr", "fpr")
+#dm woonfraude4
+m.dt.predicted.4 <- predict(m.dt.woonfraude.4, newdata = df.vld, type = 'prob')
+m.dt.pred.4 <- prediction(m.dt.predicted.4[,1],df.vld$woonfraude_aangetoond)
+m.dt.perf.4 <- performance(m.dt.pred.4, "tpr", "fpr")
+```
+
+```{r, fig.height=4, fig.width=4}
+plot(m.rf.perf, col='Red', main= "ROC curve")
+plot(m.dt.perf, add=TRUE, col='Orange', main= "ROC curve")
+plot(m.dt.perf.2, add=TRUE, col='Green')
+plot(m.dt.perf.2p, add=TRUE, col='Brown')
+plot(m.dt.perf.3, add=TRUE, col='Blue')
+plot(m.dt.perf.4, add=TRUE, col='Purple')
+abline(0,1,untf = FALSE, col="gray60",lty=2)
+```
+
+## Confusion matrix
+
+```{r echo= FALSE}
+expected_value = df.vld$woonfraude_aangetoond
+
+m.rf.predicted.cls <- predict(m.rf.woonfraude, newdata = df.vld, type = 'class')
+
+m.dt.predicted.2.cls <- predict(m.dt.woonfraude.2, newdata = df.vld, type = 'class')
+
+m.dt.predicted.2p.cls <- predict(m.dt.woonfraude.2.p, newdata = df.vld, type = 'class')
+
+m.dt.predicted.3.cls <- predict(m.dt.woonfraude.3, newdata = df.vld, type = 'class')
+
+m.dt.predicted.4.cls <- predict(m.dt.woonfraude.4, newdata = df.vld, type = 'class')
+
+```
+
+
+```{r}
+table(expected_value, m.rf.predicted.cls)
+table(expected_value, m.dt.predicted.2.cls)
+table(expected_value, m.dt.predicted.2p.cls)
+```
+
+## Confusion tabellen model 3 en 4
+```{r}
+table(expected_value, m.dt.predicted.3.cls)
+table(expected_value, m.dt.predicted.4.cls)
+```
+
+## Conclusie business case
+
+De totale business case wordt berekend op basis van de validatie dataset van 104 (of 30%) van het aantal cases uit de totale dataset: 
+
+* *True positive* : We voorspellen woonfraude, de kosten van onderzoek voor vaststelling bedragen gemiddeld € 350,-. Voor proces dat leidt tot einde huurovereenkomst komen hier nog werkdagen en proceskosten bij gemiddeld € 1400,-.  
+
+* *False positive*  : We voorspellen woonfraude, gaan onderzoeken maar dat had niet gehoeven: We maken dus onderzoekskosten (a € 350,-) die we niet hadden hoeven maken.
+
+* *False negative* : We voorspellen geen woonfraude, maar die is er in werkelijkheid wel. De situatie blijft gehandhaaft.   
+* *True negative* : We voorspellen geen woonfraude en die is ook niet aan de orde. We besparen hier onderzoekskosten ten opzichte van het niet gebruiken van een model.
+
+## Model succes?
+Model 3 presteert het best wanneer we een model willen selecteren op basis van de verhouding tussen false negatives en true negatives. 
+
+```{r}
+# Wat is de succesrate op de gehele dataset??
+t <- table(df$woonfraude_aangetoond)
+prop.table(t)
+```
+
+```{r echo = FALSE}
+table(expected_value, m.dt.predicted.3.cls)
+```
+
+## Aanbevelingen en mogelijke verbeteringen
+
+De data analyse kan nog verder doorontwikkeld worden door:
+
+*	Combinatie met externe data, waaronder uit systeem van woonruimteverdeling info over woningzoekenden (Kaster).
+
+*	Onderzoeken van meer criteria en op basis van ervaring bij andere corporaties registeren van meer data (bv. wie is melder) buren, medewerker of instantie en heeft dit invloed op de kans op woonfraude.
+
+*	Het model verder trainen op andere datasets.
+
+## Vragen?
+
+
+## Business Case
+
+```{r, echo=FALSE}
+# cost matrix in euros [TP, FP, FN, TN]
+# TP kosten 350 + 1400 maar wat zijn de opbrengsten van een vrijgekomen woning?
+# FP kosten 350
+# FN geen kosten maar vooral gemiste opbrengsten
+# TN geen kosten noch baten
+m.cost <- matrix(c(10000-350-1400, -350, -10000, 350), nrow = 2, ncol =2)
+# create a prediction object
+pred <- ROCR::prediction(m.dt.predicted.3[,1],df.vld$woonfraude_aangetoond)
+
+# count of tp,tn,fp,fn over range of all cut-offs
+# when typing pred@ you can see various options
+m.pred <- cbind(pred@tp[[1]], pred@fp[[1]], pred@fn[[1]], pred@tn[[1]])
+cutoffs <- pred@cutoffs[[1]]
+# calculate business case at each cut-off
+# matrix multiplication (the inner product) is used hence %*% (do not confuse this with %>% used in dplyr!)
+business.case <- m.pred[,1:4] %*% as.vector(m.cost) 
+
+```
+
+```{r,echo=FALSE, fig.width=9, fig.height=5}
+require(ggplot2)
+library(scales)
+df.bc <- data.frame(cutoffs,business.case,m.pred[,1:4])
+# drop first row containing Inf
+df.bc <- df.bc[-1,]
+ggplot(data=df.bc, aes(cutoffs,business.case)) + 
+  geom_line() + #scale_x_reverse() +
+  geom_hline(aes(yintercept=0),col = "lightgray") +
+  geom_point(aes(x=cutoffs[which.max(business.case)],y = max(business.case)), col='red') +
+  scale_y_continuous(label=dollar_format(prefix="€"),
+                     limits=c(min(business.case), 
+                              max(business.case))
+                     ) +
+  #ylim(-10000,10000) +
+  labs(title = 'Business case Woonfraude',
+       subtitle = 'selectiefonderzoek doen obv woonfraude',
+       caption = 'DIKW Academy | Datascience businesscase')
+```
+
+Optimal confusion matrix
+
+```{r}
+optimal.cutoff <- cutoffs[which.max(business.case)]
+dfcm <- df.bc %>% 
+  filter(cutoffs == optimal.cutoff) %>% 
+  select(c(-cutoffs,-business.case))
+
+matrix(dfcm,nrow=2)
+```
+
+ 
